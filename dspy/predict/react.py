@@ -243,60 +243,30 @@ class ReAct(Module):
     def truncate_trajectory(self, trajectory):
         """Truncates the trajectory so that it fits in the context window.
 
-        If keep_last_n_steps is set, keeps only the last N steps. Otherwise,
-        removes the oldest single step.
-
         Users can override this method to implement their own truncation logic.
         """
-        keys = list(trajectory.keys())
-        if not keys:
+        if self.keep_last_n_steps is None:
+            # Original simple behavior - remove oldest 4 keys
+            keys = list(trajectory.keys())
+            if len(keys) < 4:
+                raise ValueError(
+                    "The trajectory is too long so your prompt exceeded the context window, but the trajectory cannot be "
+                    "truncated because it only has one tool call."
+                )
+            for key in keys[:4]:
+                trajectory.pop(key)
             return trajectory
-
-        # Calculate number of complete steps (each step has 4 keys: thought, tool_name, tool_args, observation)
-        num_steps = len([k for k in keys if k.startswith("thought_")])
-
-        if num_steps <= 1:
-            raise ValueError(
-                "The trajectory is too long so your prompt exceeded the context window, but the trajectory cannot be "
-                "truncated because it only has one tool call."
-            )
-
-        if self.keep_last_n_steps is not None and num_steps > self.keep_last_n_steps:
-            # Keep only the last N steps
-            steps_to_remove = num_steps - self.keep_last_n_steps
-            new_trajectory = {}
-
-            # Keep only the specified number of recent steps, renumbering from 0
-            for new_idx, old_idx in enumerate(range(steps_to_remove, num_steps)):
-                for suffix in ["thought", "tool_name", "tool_args", "observation"]:
-                    old_key = f"{suffix}_{old_idx}"
-                    if old_key in trajectory:
-                        new_key = f"{suffix}_{new_idx}"
-                        new_trajectory[new_key] = trajectory[old_key]
-
-            return new_trajectory
         else:
-            # Remove the oldest single step
-            for suffix in ["thought", "tool_name", "tool_args", "observation"]:
-                key = f"{suffix}_0"
-                if key in trajectory:
-                    trajectory.pop(key)
-
-            # Renumber remaining steps to maintain continuity
-            new_trajectory = {}
-            step_idx = 0
-            for old_idx in range(1, num_steps):
-                found_step = False
-                for suffix in ["thought", "tool_name", "tool_args", "observation"]:
-                    old_key = f"{suffix}_{old_idx}"
-                    if old_key in trajectory:
-                        new_key = f"{suffix}_{step_idx}"
-                        new_trajectory[new_key] = trajectory[old_key]
-                        found_step = True
-                if found_step:
-                    step_idx += 1
-
-            return new_trajectory
+            # Keep only last N steps - simple approach
+            all_keys = list(trajectory.keys())
+            step_keys = [k for k in all_keys if k.startswith(('thought_', 'tool_name_', 'tool_args_', 'observation_'))]
+            
+            if len(step_keys) <= self.keep_last_n_steps * 4:
+                return trajectory  # Already small enough
+                
+            # Keep only the keys for the last N steps
+            keep_keys = step_keys[-(self.keep_last_n_steps * 4):]
+            return {k: trajectory[k] for k in keep_keys}
 
 
 def _fmt_exc(err: BaseException, *, limit: int = 5) -> str:

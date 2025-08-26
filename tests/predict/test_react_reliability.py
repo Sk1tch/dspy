@@ -113,14 +113,16 @@ def test_react_keep_last_n_steps():
     # Truncate to keep only last 2 steps
     truncated = react.truncate_trajectory(trajectory)
     
-    # Should have only the last 2 steps (steps 3 and 4, renumbered to 0 and 1)
-    assert "thought_0" in truncated
-    assert "thought_1" in truncated
+    # Should have only the last 2 steps (steps 3 and 4, with original numbering)
+    assert "thought_3" in truncated
+    assert "thought_4" in truncated
+    assert "thought_0" not in truncated
+    assert "thought_1" not in truncated
     assert "thought_2" not in truncated
     
-    # Check that the content is from the original last steps
-    assert truncated["thought_0"] == "Thought 3"
-    assert truncated["thought_1"] == "Thought 4"
+    # Check that the content is preserved
+    assert truncated["thought_3"] == "Thought 3"
+    assert truncated["thought_4"] == "Thought 4"
 
 
 def test_trajectory_simple_truncation():
@@ -143,17 +145,17 @@ def test_trajectory_simple_truncation():
         trajectory[f"tool_args_{i}"] = {"x": f"test_{i}"}
         trajectory[f"observation_{i}"] = f"Result: test_{i}"
     
-    # Simple truncation should remove the oldest step and renumber
+    # Simple truncation should remove the oldest 4 keys (step 0)
     truncated = react.truncate_trajectory(trajectory)
     
-    # Should have 2 steps (originally steps 1 and 2, renumbered to 0 and 1)
-    assert "thought_0" in truncated
+    # Should have steps 1 and 2, step 0 removed
+    assert "thought_0" not in truncated
     assert "thought_1" in truncated
-    assert "thought_2" not in truncated
+    assert "thought_2" in truncated
     
-    # Check that content is from steps 1 and 2
-    assert truncated["thought_0"] == "Thought 1"
-    assert truncated["thought_1"] == "Thought 2"
+    # Check that content is preserved with original numbering
+    assert truncated["thought_1"] == "Thought 1"
+    assert truncated["thought_2"] == "Thought 2"
 
 
 def test_react_max_retries_exhausted():
@@ -207,10 +209,14 @@ def test_react_context_window_truncation():
     assert len([k for k in truncated.keys() if k.startswith("thought_")]) == 3
     assert len(truncated) < len(large_trajectory)
     
-    # Should contain the last 3 steps (7, 8, 9 renumbered to 0, 1, 2)
-    assert truncated["thought_0"] == "Thought 7"
-    assert truncated["thought_1"] == "Thought 8" 
-    assert truncated["thought_2"] == "Thought 9"
+    # Should contain the last 3 steps (7, 8, 9 with original numbering)
+    assert truncated["thought_7"] == "Thought 7"
+    assert truncated["thought_8"] == "Thought 8" 
+    assert truncated["thought_9"] == "Thought 9"
+    
+    # Earlier steps should be gone
+    assert "thought_0" not in truncated
+    assert "thought_6" not in truncated
 
 
 @pytest.mark.asyncio
