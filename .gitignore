@@ -67,3 +67,4 @@ docs/docs/**/*.json*
 
 test_before_pypi/
 .github/.internal_dspyai/dist/
+.claude/settings.local.json
